@@ -1,9 +1,12 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
-	"net/http"
 	"sync"
+
+	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/cloudwego/hertz/pkg/protocol/consts"
 )
 
 // ChatMessage represents a chat message structure.
@@ -12,17 +15,19 @@ type ChatMessage struct {
 	Message string `json:"message"`
 }
 
+type EmptyResp struct{}
+
 var (
 	messages     []ChatMessage
 	messagesLock sync.Mutex
 )
 
-// SaveChatHandler handles the saving of chat messages.
-func SaveChatHandler(w http.ResponseWriter, r *http.Request) {
+func SaveChatHertzHandler(ctx context.Context, c *app.RequestContext) {
+	var err error
 	var message ChatMessage
-	err := json.NewDecoder(r.Body).Decode(&message)
+	err = c.Bind(&message)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		c.String(400, err.Error())
 		return
 	}
 
@@ -34,14 +39,19 @@ func SaveChatHandler(w http.ResponseWriter, r *http.Request) {
 
 	messages = append(messages, message)
 
-	w.WriteHeader(http.StatusCreated)
+	c.Status(consts.StatusOK)
+	body, _ := json.Marshal(&EmptyResp{})
+	c.Write(body)
 }
 
-// ShowChatHandler handles retrieving chat messages.
-func ShowChatHandler(w http.ResponseWriter, r *http.Request) {
+func ShowChatHertzHandler(ctx context.Context, c *app.RequestContext) {
 	messagesLock.Lock()
 	defer messagesLock.Unlock()
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(messages)
+	c.Header("Content-Type", "application/json")
+	body, err := json.Marshal(messages)
+	if err != nil {
+		c.String(500, err.Error())
+		return
+	}
+	c.Write(body)
 }
